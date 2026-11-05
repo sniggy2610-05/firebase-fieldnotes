@@ -1,15 +1,16 @@
-
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'firebase_options.dart';
+import 'services/auth_service.dart';
+import 'screens/auth_gate.dart';
+import 'screens/profile_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   runApp(const ProductApp());
 }
@@ -23,12 +24,12 @@ class ProductApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Firebase Fieldnotes',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF795548),
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF795548)),
         useMaterial3: true,
       ),
-      home: const ProductHomePage(),
+      home: AuthGate(
+        authenticatedBuilder: (context) => const ProductHomePage(),
+      ),
     );
   }
 }
@@ -41,15 +42,13 @@ class ProductHomePage extends StatefulWidget {
 }
 
 class _ProductHomePageState extends State<ProductHomePage> {
-  final CollectionReference<Map<String, dynamic>> products =
-  FirebaseFirestore.instance.collection('products');
+  final CollectionReference<Map<String, dynamic>> products = FirebaseFirestore
+      .instance
+      .collection('products');
 
-  final TextEditingController searchController =
-  TextEditingController();
-  final TextEditingController minController =
-  TextEditingController();
-  final TextEditingController maxController =
-  TextEditingController();
+  final TextEditingController searchController = TextEditingController();
+  final TextEditingController minController = TextEditingController();
+  final TextEditingController maxController = TextEditingController();
 
   String searchText = '';
 
@@ -132,15 +131,14 @@ class _ProductHomePageState extends State<ProductHomePage> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Save failed: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Save failed: $e')));
     }
   }
 
   Future<void> deleteProduct(
-      DocumentSnapshot<Map<String, dynamic>> product,
-      ) async {
+    DocumentSnapshot<Map<String, dynamic>> product,
+  ) async {
     final name = product.data()?['name'] ?? 'this product';
 
     final confirm = await showDialog<bool>(
@@ -151,13 +149,11 @@ class _ProductHomePageState extends State<ProductHomePage> {
           content: Text('Are you sure you want to delete "$name"?'),
           actions: [
             TextButton(
-              onPressed: () =>
-                  Navigator.pop(dialogContext, false),
+              onPressed: () => Navigator.pop(dialogContext, false),
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () =>
-                  Navigator.pop(dialogContext, true),
+              onPressed: () => Navigator.pop(dialogContext, true),
               child: const Text('Delete'),
             ),
           ],
@@ -173,16 +169,13 @@ class _ProductHomePageState extends State<ProductHomePage> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Product deleted successfully!'),
-        ),
+        const SnackBar(content: Text('Product deleted successfully!')),
       );
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Delete failed: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Delete failed: $e')));
     }
   }
 
@@ -201,6 +194,22 @@ class _ProductHomePageState extends State<ProductHomePage> {
       appBar: AppBar(
         title: const Text('🍂 Firebase Fieldnotes'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: 'My Profile',
+            icon: const Icon(Icons.account_circle),
+            onPressed: () {
+              final user = AuthService.instance.currentUser;
+
+              if (user != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => ProfileScreen(user: user)),
+                );
+              }
+            },
+          ),
+        ],
       ),
 
       floatingActionButton: FloatingActionButton.extended(
@@ -245,8 +254,7 @@ class _ProductHomePageState extends State<ProductHomePage> {
                     Expanded(
                       child: TextField(
                         controller: minController,
-                        keyboardType:
-                        const TextInputType.numberWithOptions(
+                        keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
                         ),
                         onChanged: (_) => setState(() {}),
@@ -266,8 +274,7 @@ class _ProductHomePageState extends State<ProductHomePage> {
                     Expanded(
                       child: TextField(
                         controller: maxController,
-                        keyboardType:
-                        const TextInputType.numberWithOptions(
+                        keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
                         ),
                         onChanged: (_) => setState(() {}),
@@ -311,11 +318,8 @@ class _ProductHomePageState extends State<ProductHomePage> {
           const Divider(height: 1),
 
           Expanded(
-            child: StreamBuilder<
-                QuerySnapshot<Map<String, dynamic>>>(
-              stream: products.snapshots(
-                includeMetadataChanges: true,
-              ),
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: products.snapshots(includeMetadataChanges: true),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return Center(
@@ -330,30 +334,21 @@ class _ProductHomePageState extends State<ProductHomePage> {
                 }
 
                 if (!snapshot.hasData) {
-                  return const Center(
-                    child: CircularProgressIndicator(),
-                  );
+                  return const Center(child: CircularProgressIndicator());
                 }
 
                 final allProducts = snapshot.data!.docs;
 
-                if (minInvalid ||
-                    maxInvalid ||
-                    rangeInvalid) {
+                if (minInvalid || maxInvalid || rangeInvalid) {
                   return const Center(
-                    child: Text(
-                      'Please correct the price filters.',
-                    ),
+                    child: Text('Please correct the price filters.'),
                   );
                 }
 
-                final filteredProducts =
-                allProducts.where((doc) {
+                final filteredProducts = allProducts.where((doc) {
                   final data = doc.data();
 
-                  final name = (data['name'] ?? '')
-                      .toString()
-                      .toLowerCase();
+                  final name = (data['name'] ?? '').toString().toLowerCase();
 
                   final rawPrice = data['price'];
 
@@ -363,20 +358,13 @@ class _ProductHomePageState extends State<ProductHomePage> {
 
                   if (!price.isFinite) return false;
 
-                  final matchesName =
-                  name.contains(searchText);
+                  final matchesName = name.contains(searchText);
 
-                  final matchesMin =
-                      minPrice == null ||
-                          price >= minPrice!;
+                  final matchesMin = minPrice == null || price >= minPrice!;
 
-                  final matchesMax =
-                      maxPrice == null ||
-                          price <= maxPrice!;
+                  final matchesMax = maxPrice == null || price <= maxPrice!;
 
-                  return matchesName &&
-                      matchesMin &&
-                      matchesMax;
+                  return matchesName && matchesMin && matchesMax;
                 }).toList();
 
                 return Column(
@@ -403,102 +391,75 @@ class _ProductHomePageState extends State<ProductHomePage> {
                       padding: const EdgeInsets.all(12),
                       child: Text(
                         '${filteredProducts.length} products found',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium,
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
                     ),
 
                     Expanded(
                       child: filteredProducts.isEmpty
                           ? Center(
-                        child: Text(
-                          allProducts.isEmpty
-                              ? 'No products yet.\nTap Add Product to begin!'
-                              : 'No matching products found.',
-                          textAlign: TextAlign.center,
-                        ),
-                      )
+                              child: Text(
+                                allProducts.isEmpty
+                                    ? 'No products yet.\nTap Add Product to begin!'
+                                    : 'No matching products found.',
+                                textAlign: TextAlign.center,
+                              ),
+                            )
                           : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(
-                          12,
-                          0,
-                          12,
-                          90,
-                        ),
-                        itemCount:
-                        filteredProducts.length,
-                        itemBuilder: (context, index) {
-                          final doc =
-                          filteredProducts[index];
+                              padding: const EdgeInsets.fromLTRB(12, 0, 12, 90),
+                              itemCount: filteredProducts.length,
+                              itemBuilder: (context, index) {
+                                final doc = filteredProducts[index];
+                                final data = doc.data();
 
-                          final data = doc.data();
+                                final name = data['name'] ?? 'Unnamed';
+                                final rawPrice = data['price'];
 
-                          final name =
-                              data['name'] ?? 'Unnamed';
+                                final price = rawPrice is num
+                                    ? rawPrice.toDouble()
+                                    : 0.0;
 
-                          final rawPrice = data['price'];
-
-                          final price =
-                          rawPrice is num
-                              ? rawPrice.toDouble()
-                              : 0.0;
-
-                          return Card(
-                            child: ListTile(
-                              leading: const CircleAvatar(
-                                child: Icon(
-                                  Icons.shopping_bag,
-                                ),
-                              ),
-
-                              title: Text(name.toString()),
-
-                              subtitle: Text(
-                                'Document ID: ${doc.id}',
-                              ),
-
-                              trailing: Row(
-                                mainAxisSize:
-                                MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    '\$${price.toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                      fontWeight:
-                                      FontWeight.bold,
+                                return Card(
+                                  child: ListTile(
+                                    leading: const CircleAvatar(
+                                      child: Icon(Icons.shopping_bag),
+                                    ),
+                                    title: Text(name.toString()),
+                                    subtitle: Text('Document ID: ${doc.id}'),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          '\$${price.toStringAsFixed(2)}',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        PopupMenuButton<String>(
+                                          onSelected: (choice) {
+                                            if (choice == 'edit') {
+                                              showProductDialog(product: doc);
+                                            } else if (choice == 'delete') {
+                                              deleteProduct(doc);
+                                            }
+                                          },
+                                          itemBuilder: (context) => const [
+                                            PopupMenuItem(
+                                              value: 'edit',
+                                              child: Text('Edit'),
+                                            ),
+                                            PopupMenuItem(
+                                              value: 'delete',
+                                              child: Text('Delete'),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
                                     ),
                                   ),
-
-                                  PopupMenuButton<String>(
-                                    onSelected: (choice) {
-                                      if (choice == 'edit') {
-                                        showProductDialog(
-                                          product: doc,
-                                        );
-                                      } else if (choice ==
-                                          'delete') {
-                                        deleteProduct(doc);
-                                      }
-                                    },
-                                    itemBuilder: (context) =>
-                                    const [
-                                      PopupMenuItem(
-                                        value: 'edit',
-                                        child: Text('Edit'),
-                                      ),
-                                      PopupMenuItem(
-                                        value: 'delete',
-                                        child: Text('Delete'),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
+                                );
+                              },
                             ),
-                          );
-                        },
-                      ),
                     ),
                   ],
                 );
@@ -526,12 +487,10 @@ class ProductEditorDialog extends StatefulWidget {
   });
 
   @override
-  State<ProductEditorDialog> createState() =>
-      _ProductEditorDialogState();
+  State<ProductEditorDialog> createState() => _ProductEditorDialogState();
 }
 
-class _ProductEditorDialogState
-    extends State<ProductEditorDialog> {
+class _ProductEditorDialogState extends State<ProductEditorDialog> {
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController nameController;
@@ -541,13 +500,9 @@ class _ProductEditorDialogState
   void initState() {
     super.initState();
 
-    nameController = TextEditingController(
-      text: widget.initialName,
-    );
+    nameController = TextEditingController(text: widget.initialName);
 
-    priceController = TextEditingController(
-      text: widget.initialPrice,
-    );
+    priceController = TextEditingController(text: widget.initialPrice);
   }
 
   @override
@@ -560,23 +515,16 @@ class _ProductEditorDialogState
   void saveProduct() {
     if (!_formKey.currentState!.validate()) return;
 
-    final price = double.parse(
-      priceController.text.trim(),
-    );
+    final price = double.parse(priceController.text.trim());
 
-    Navigator.of(context).pop({
-      'name': nameController.text.trim(),
-      'price': price,
-    });
+    Navigator.of(context)
+        .pop({'name': nameController.text.trim(), 'price': price});
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(
-        widget.isEditing ? 'Edit Product' : 'Add Product',
-      ),
-
+      title: Text(widget.isEditing ? 'Edit Product' : 'Add Product'),
       content: Form(
         key: _formKey,
         child: Column(
@@ -589,8 +537,7 @@ class _ProductEditorDialogState
                 border: OutlineInputBorder(),
               ),
               validator: (value) {
-                if (value == null ||
-                    value.trim().isEmpty) {
+                if (value == null || value.trim().isEmpty) {
                   return 'Name cannot be empty.';
                 }
 
@@ -602,8 +549,7 @@ class _ProductEditorDialogState
 
             TextFormField(
               controller: priceController,
-              keyboardType:
-              const TextInputType.numberWithOptions(
+              keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
               decoration: const InputDecoration(
@@ -612,13 +558,9 @@ class _ProductEditorDialogState
                 border: OutlineInputBorder(),
               ),
               validator: (value) {
-                final price = double.tryParse(
-                  value?.trim() ?? '',
-                );
+                final price = double.tryParse(value?.trim() ?? '');
 
-                if (price == null ||
-                    !price.isFinite ||
-                    price < 0) {
+                if (price == null || !price.isFinite || price < 0) {
                   return 'Enter a valid nonnegative price.';
                 }
 
@@ -628,17 +570,12 @@ class _ProductEditorDialogState
           ],
         ),
       ),
-
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-
-        FilledButton(
-          onPressed: saveProduct,
-          child: const Text('Save'),
-        ),
+        FilledButton(onPressed: saveProduct, child: const Text('Save')),
       ],
     );
   }
